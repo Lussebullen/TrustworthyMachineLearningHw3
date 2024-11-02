@@ -78,7 +78,8 @@ def verify_str(input_str, sk, model, tokenizer, max_new_tokens):
     random.seed(sk)
     rs = [random.random() for _ in range(max_new_tokens)]
     # Generate tokens with model
-    random.seed(sk)
+    # random.seed(sk) # Bad, this will make it always true.
+    random.seed(SECRET_KEY)
     inputs = tokenizer(input_str, return_tensors="pt")
     outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, return_dict_in_generate=True,
                             output_scores=True)      
@@ -89,10 +90,16 @@ def verify_str(input_str, sk, model, tokenizer, max_new_tokens):
         next_token_id = outputs.sequences[0][input_len + i]
         next_token = tokenizer.decode(next_token_id)
         scores = outputs.scores[i]
-        scores_processed = scores.clone().flatten().softmax(dim=-1)
+        scores_processed = scores.clone().softmax(dim=-1)
+        #scores_processed = scores.clone().flatten().softmax(dim=-1) #Removed flatten for consistency
         r = rs[i]
         # TODO: Check if the next token is the one chosen by r
-        valid=True
+        # Print scores dimension
+        cumsum = torch.cumsum(scores_processed, dim=-1)
+        cumsum_tail = torch.where(cumsum > r)
+        next_token_id_check = cumsum_tail[1][0].item()
+        next_token_check = tokenizer.decode(next_token_id_check)
+        valid = (next_token == next_token_check)
         
         valids.append(valid)
     # Check if 90% of generated tokens pass our verifier check
@@ -128,5 +135,6 @@ if __name__ == '__main__':
     for input_str in prompts:
         print(query_model(input_str, MODEL_ORIG, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
         print(query_model(input_str, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
-        # print(verify_str(input_str, SECRET_KEY, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
+        print(f"Uses secret key {SECRET_KEY} : {verify_str(input_str, SECRET_KEY, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS)}")
+        print(f"Uses secret key {SECRET_KEY + 1} : {verify_str(input_str, SECRET_KEY + 1, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS)}")
 
