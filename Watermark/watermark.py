@@ -4,6 +4,7 @@ from transformers.generation.logits_process import LogitsProcessor, LogitsProces
 from transformers import GPT2LMHeadModel
 import random
 import numpy as np
+import sys
 
 # Watermarking scheme: modify sampling strategy
 # Generates random number for every word iteration
@@ -15,7 +16,9 @@ class MyWatermarkLogitsProcessor(LogitsProcessor):
         scores_processed = scores.clone().softmax(dim=-1)
 
         # TODO: select the word using r (currently selecting the first word in vocab)
-        next_token_id = 0
+        cumsum = torch.cumsum(scores_processed, dim=-1)
+        cumsum_tail = torch.where(cumsum > r)
+        next_token_id = cumsum_tail[1][0].item()
 
         # Change score of next_token to inf, and scores of all other words to -inf
         # Forcing the model to choose next_token
@@ -126,5 +129,4 @@ if __name__ == '__main__':
         print(query_model(input_str, MODEL_ORIG, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
         print(query_model(input_str, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
         # print(verify_str(input_str, SECRET_KEY, model, tokenizer, max_new_tokens=MAX_NEW_TOKENS))
-
 
